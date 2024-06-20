@@ -6,6 +6,7 @@ channels:
 dependencies:
 - python=3.6.9
 - pip>=21.0,<22
+- pillow
 - pytorch==1.7.1
 - torchvision==0.8.2
 - torchaudio==0.7.2

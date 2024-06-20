@@ -16,7 +16,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 def plot_cm(histogram, label_cmap, cfg):
     fig = plt.figure(figsize=(10, 10))
     ax = fig.gca()
-    hist = histogram.detach().cpu().to(torch.float32)
+    hist = histogram.detach().cuda().to(torch.float32)
     hist /= torch.clamp_min(hist.sum(dim=0, keepdim=True), 1)
     sns.heatmap(hist.t(), annot=False, fmt='g', ax=ax, cmap="Blues", cbar=False)
     ax.set_title('Predicted labels', fontsize=28)
@@ -50,7 +50,7 @@ def _apply_crf(tup):
 
 
 def batched_crf(pool, img_tensor, prob_tensor):
-    outputs = pool.map(_apply_crf, zip(img_tensor.detach().cpu(), prob_tensor.detach().cpu()))
+    outputs = pool.map(_apply_crf, zip(img_tensor.detach().cuda(), prob_tensor.detach().cuda()))
     return torch.cat([torch.from_numpy(arr).unsqueeze(0) for arr in outputs], dim=0)
 
 
@@ -109,6 +109,10 @@ def my_app(cfg: DictConfig) -> None:
             # all_good_images = range(80)
             # all_good_images = [ 5, 20, 56]
             all_good_images = [11, 32, 43, 52]
+        # elif model.cfg.dataset_name == "potsdam":
+        #     # all_good_images = range(80)
+        #     # all_good_images = [ 5, 20, 56]
+        #     all_good_images = [19, 54]
         else:
             raise ValueError("Unknown Dataset {}".format(model.cfg.dataset_name))
         batch_nums = torch.tensor([n // (cfg.batch_size * 2) for n in all_good_images])
@@ -142,17 +146,17 @@ def my_app(cfg: DictConfig) -> None:
 
                     if run_picie:
                         picie_preds = picie_cluster_metrics.map_clusters(
-                            picie_cluster_probe(par_picie(img), None)[1].argmax(1).cpu())
+                            picie_cluster_probe(par_picie(img), None)[1].argmax(1).cuda())
 
                     if i in batch_nums:
                         matching_offsets = batch_offsets[torch.where(batch_nums == i)]
                         for offset in matching_offsets:
-                            saved_data["linear_preds"].append(linear_preds.cpu()[offset].unsqueeze(0))
-                            saved_data["cluster_preds"].append(cluster_preds.cpu()[offset].unsqueeze(0))
-                            saved_data["label"].append(label.cpu()[offset].unsqueeze(0))
-                            saved_data["img"].append(img.cpu()[offset].unsqueeze(0))
+                            saved_data["linear_preds"].append(linear_preds.cuda()[offset].unsqueeze(0))
+                            saved_data["cluster_preds"].append(cluster_preds.cuda()[offset].unsqueeze(0))
+                            saved_data["label"].append(label.cuda()[offset].unsqueeze(0))
+                            saved_data["img"].append(img.cuda()[offset].unsqueeze(0))
                             if run_picie:
-                                saved_data["picie_preds"].append(picie_preds.cpu()[offset].unsqueeze(0))
+                                saved_data["picie_preds"].append(picie_preds.cuda()[offset].unsqueeze(0))
         saved_data = {k: torch.cat(v, dim=0) for k, v in saved_data.items()}
 
         tb_metrics = {

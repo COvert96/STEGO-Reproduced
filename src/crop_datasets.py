@@ -73,6 +73,12 @@ class RandomCropComputer(Dataset):
     def five_crops(self, i, img):
         return five_crop(img, self._get_size(img))
 
+    def random_crop_method(self, i, x):
+        return self.random_crops(i, x)
+
+    def five_crop_method(self, i, x):
+        return self.five_crops(i, x)
+
     def __init__(self, cfg, dataset_name, img_set, crop_type, crop_ratio):
         self.pytorch_data_dir = cfg.pytorch_data_dir
         self.crop_ratio = crop_ratio
@@ -88,9 +94,9 @@ class RandomCropComputer(Dataset):
         os.makedirs(self.label_dir, exist_ok=True)
 
         if crop_type == "random":
-            cropper = lambda i, x: self.random_crops(i, x)
+            cropper = self.random_crop_method
         elif crop_type == "five":
-            cropper = lambda i, x: self.five_crops(i, x)
+            cropper = self.five_crop_method
         else:
             raise ValueError('Unknown crop type {}'.format(crop_type))
 
@@ -127,6 +133,10 @@ class RandomCropComputer(Dataset):
         return len(self.dataset)
 
 
+def collate_fn(batch):
+    return batch
+
+
 @hydra.main(config_path="configs", config_name="train_config.yml")
 def my_app(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
@@ -137,7 +147,7 @@ def my_app(cfg: DictConfig) -> None:
     # crop_types = ["five","random"]
     # crop_ratios = [.5, .7]
 
-    dataset_names = ["cityscapes"]
+    dataset_names = ["cocostuff27"]
     img_sets = ["train", "val"]
     crop_types = ["five"]
     crop_ratios = [.5]
@@ -147,7 +157,7 @@ def my_app(cfg: DictConfig) -> None:
             for dataset_name in dataset_names:
                 for img_set in img_sets:
                     dataset = RandomCropComputer(cfg, dataset_name, img_set, crop_type, crop_ratio)
-                    loader = DataLoader(dataset, 1, shuffle=False, num_workers=cfg.num_workers, collate_fn=lambda l: l)
+                    loader = DataLoader(dataset, 1, shuffle=False, num_workers=cfg.num_workers, collate_fn=collate_fn)
                     for _ in tqdm(loader):
                         pass
 
