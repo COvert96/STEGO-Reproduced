@@ -234,7 +234,7 @@ class Coco(Dataset):
                  coarse_labels, exclude_things, subset=None):
         super(Coco, self).__init__()
         self.split = image_set
-        self.root = join(root, "cocostuff")
+        self.root = join(root, "cocostuff_small")
         self.coarse_labels = coarse_labels
         self.transform = transform
         self.label_transform = target_transform
@@ -477,6 +477,16 @@ class ContrastiveSegDataset(Dataset):
             dataset_class = CroppedDataset
             extra_args = dict(dataset_name="cocostuff27", crop_type=cfg.crop_type, crop_ratio=cfg.crop_ratio)
         elif dataset_name == "cocostuff27" and crop_type is None:
+            self.n_classes = 27
+            dataset_class = Coco
+            extra_args = dict(coarse_labels=False, subset=None, exclude_things=False)
+            if image_set == "val":
+                extra_args["subset"] = 7
+        elif dataset_name == "cocostuff_small" and crop_type is not None:
+            self.n_classes = 27
+            dataset_class = CroppedDataset
+            extra_args = dict(dataset_name="cocostuff_small", crop_type=cfg.crop_type, crop_ratio=cfg.crop_ratio)
+        elif dataset_name == "cocostuff_small" and crop_type is None:
             self.n_classes = 27
             dataset_class = Coco
             extra_args = dict(coarse_labels=False, subset=None, exclude_things=False)

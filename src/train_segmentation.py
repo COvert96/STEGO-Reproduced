@@ -1,3 +1,5 @@
+import random
+
 from utils import *
 from modules import *
 from data import *
@@ -17,6 +19,7 @@ import sys
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+
 def get_class_labels(dataset_name):
     if dataset_name.startswith("cityscapes"):
         return [
@@ -27,6 +30,14 @@ def get_class_labels(dataset_name):
             'truck', 'bus', 'caravan', 'trailer', 'train',
             'motorcycle', 'bicycle']
     elif dataset_name == "cocostuff27":
+        return [
+            "electronic", "appliance", "food", "furniture", "indoor",
+            "kitchen", "accessory", "animal", "outdoor", "person",
+            "sports", "vehicle", "ceiling", "floor", "food",
+            "furniture", "rawmaterial", "textile", "wall", "window",
+            "building", "ground", "plant", "sky", "solid",
+            "structural", "water"]
+    elif dataset_name == "cocostuff_small":
         return [
             "electronic", "appliance", "food", "furniture", "indoor",
             "kitchen", "accessory", "animal", "outdoor", "person",
@@ -284,7 +295,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
             if self.trainer.is_global_zero and not self.cfg.submitting_to_aml:
                 #output_num = 0
-                output_num = random.randint(0, len(outputs) -1)
+                output_num = random.randint(0, len(outputs) - 1)
                 output = {k: v.detach().cpu() for k, v in outputs[output_num].items()}
 
                 fig, ax = plt.subplots(4, self.cfg.n_images, figsize=(self.cfg.n_images * 3, 4 * 3))
@@ -473,8 +484,8 @@ def my_app(cfg: DictConfig) -> None:
             gpu_args.pop("val_check_interval")
 
     else:
-        gpu_args = dict(gpus=-1, accelerator='ddp', val_check_interval=cfg.val_freq)
-        # gpu_args = dict(gpus=1, accelerator='ddp', val_check_interval=cfg.val_freq)
+        # gpu_args = dict(gpus=-1, accelerator='ddp', val_check_interval=cfg.val_freq)
+        gpu_args = dict(gpus=1, accelerator='dp', val_check_interval=cfg.val_freq)
 
         if gpu_args["val_check_interval"] > len(train_loader) // 4:
             gpu_args.pop("val_check_interval")

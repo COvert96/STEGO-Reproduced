@@ -16,7 +16,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 def plot_cm(histogram, label_cmap, cfg):
     fig = plt.figure(figsize=(10, 10))
     ax = fig.gca()
-    hist = histogram.detach().cuda().to(torch.float32)
+    hist = histogram.detach().cpu().to(torch.float32)
     hist /= torch.clamp_min(hist.sum(dim=0, keepdim=True), 1)
     sns.heatmap(hist.t(), annot=False, fmt='g', ax=ax, cmap="Blues", cbar=False)
     ax.set_title('Predicted labels', fontsize=28)
@@ -50,7 +50,7 @@ def _apply_crf(tup):
 
 
 def batched_crf(pool, img_tensor, prob_tensor):
-    outputs = pool.map(_apply_crf, zip(img_tensor.detach().cuda(), prob_tensor.detach().cuda()))
+    outputs = pool.map(_apply_crf, zip(img_tensor.detach().cpu(), prob_tensor.detach().cpu()))
     return torch.cat([torch.from_numpy(arr).unsqueeze(0) for arr in outputs], dim=0)
 
 
@@ -65,13 +65,14 @@ def my_app(cfg: DictConfig) -> None:
 
     for model_path in cfg.model_paths:
         model = LitUnsupervisedSegmenter.load_from_checkpoint(model_path)
+        model.cfg.dataset_name = "pascal-voc"
         print(OmegaConf.to_yaml(model.cfg))
 
         run_picie = cfg.run_picie and model.cfg.dataset_name == "cocostuff27"
         if run_picie:
             picie_state = torch.load("../saved_models/picie_and_probes.pth")
-            picie = picie_state["model"].cuda()
-            picie_cluster_probe = picie_state["cluster_probe"].module.cuda()
+            picie = picie_state["model"].cpu()
+            picie_cluster_probe = picie_state["cluster_probe"].module.cpu()
             picie_cluster_metrics = picie_state["cluster_metrics"]
 
         loader_crop = "center"
@@ -89,7 +90,7 @@ def my_app(cfg: DictConfig) -> None:
                                  shuffle=False, num_workers=cfg.num_workers,
                                  pin_memory=True, collate_fn=flexible_collate)
 
-        model.eval().cuda()
+        model.eval().cpu()
 
         if cfg.use_ddp:
             par_model = torch.nn.DataParallel(model.net)
@@ -105,6 +106,8 @@ def my_app(cfg: DictConfig) -> None:
             # all_good_images = range(250)
             # all_good_images = [61, 60, 49, 44, 13, 70] #Failure cases
             all_good_images = [19, 54, 67, 66, 65, 75, 77, 76, 124]  # Main figure
+        elif model.cfg.dataset_name == "pascal-voc":
+            all_good_images = [15, 19, 24, 76, 77, 97, 146]
         elif model.cfg.dataset_name == "cityscapes":
             # all_good_images = range(80)
             # all_good_images = [ 5, 20, 56]
@@ -122,8 +125,8 @@ def my_app(cfg: DictConfig) -> None:
         with Pool(cfg.num_workers + 5) as pool:
             for i, batch in enumerate(tqdm(test_loader)):
                 with torch.no_grad():
-                    img = batch["img"].cuda()
-                    label = batch["label"].cuda()
+                    img = batch["img"].cpu()
+                    label = batch["label"].cpu()
 
                     feats, code1 = par_model(img)
                     feats, code2 = par_model(img.flip(dims=[3]))
@@ -135,8 +138,8 @@ def my_app(cfg: DictConfig) -> None:
                     cluster_probs = model.cluster_probe(code, 2, log_probs=True)
 
                     if cfg.run_crf:
-                        linear_preds = batched_crf(pool, img, linear_probs).argmax(1).cuda()
-                        cluster_preds = batched_crf(pool, img, cluster_probs).argmax(1).cuda()
+                        linear_preds = batched_crf(pool, img, linear_probs).argmax(1).cpu()
+                        cluster_preds = batched_crf(pool, img, cluster_probs).argmax(1).cpu()
                     else:
                         linear_preds = linear_probs.argmax(1)
                         cluster_preds = cluster_probs.argmax(1)
@@ -146,17 +149,17 @@ def my_app(cfg: DictConfig) -> None:
 
                     if run_picie:
                         picie_preds = picie_cluster_metrics.map_clusters(
-                            picie_cluster_probe(par_picie(img), None)[1].argmax(1).cuda())
+                            picie_cluster_probe(par_picie(img), None)[1].argmax(1).cpu())
 
                     if i in batch_nums:
                         matching_offsets = batch_offsets[torch.where(batch_nums == i)]
                         for offset in matching_offsets:
-                            saved_data["linear_preds"].append(linear_preds.cuda()[offset].unsqueeze(0))
-                            saved_data["cluster_preds"].append(cluster_preds.cuda()[offset].unsqueeze(0))
-                            saved_data["label"].append(label.cuda()[offset].unsqueeze(0))
-                            saved_data["img"].append(img.cuda()[offset].unsqueeze(0))
+                            saved_data["linear_preds"].append(linear_preds.cpu()[offset].unsqueeze(0))
+                            saved_data["cluster_preds"].append(cluster_preds.cpu()[offset].unsqueeze(0))
+                            saved_data["label"].append(label.cpu()[offset].unsqueeze(0))
+                            saved_data["img"].append(img.cpu()[offset].unsqueeze(0))
                             if run_picie:
-                                saved_data["picie_preds"].append(picie_preds.cuda()[offset].unsqueeze(0))
+                                saved_data["picie_preds"].append(picie_preds.cpu()[offset].unsqueeze(0))
         saved_data = {k: torch.cat(v, dim=0) for k, v in saved_data.items()}
 
         tb_metrics = {
